@@ -2,6 +2,8 @@
 
 A real-time vessel tracking application that displays live ship positions on an interactive world map using AIS (Automatic Identification System) data.
 
+<img width="1600" height="769" alt="image" src="https://github.com/user-attachments/assets/2a7ff9ad-f57a-48ea-b98b-772f5a28b1ca" />
+
 ## Features
 
 - **Live vessel tracking** — receives real-time AIS data via WebSocket from AISStream
