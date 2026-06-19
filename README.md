@@ -1,47 +1,49 @@
-# Ship Tracker
+# MarineRadar — Global Vessel Tracking
 
-A real-time vessel tracking application that displays live ship positions on an interactive world map using AIS (Automatic Identification System) data.
+A real-time, highly-optimized vessel tracking and analysis application that displays live ship positions on an interactive world map using AIS (Automatic Identification System) data.
 
 <img width="1903" height="912" alt="image" src="https://github.com/user-attachments/assets/6eb5c4e7-fd33-4537-b00f-4ec2d0a9dde2" />
 
 ## Features
 
-- **Live vessel tracking** — receives real-time AIS data via WebSocket from AISStream
-- **Interactive map** — custom ship icons oriented by heading, rendered on a Leaflet canvas layer
-- **Vessel type color coding** — Tankers (red), Cargo (blue), Passenger (purple), Sailing (green), and more
-- **Search & filter** — search vessels by name or MMSI, filter by vessel type
-- **Detail panel** — click any vessel to see full metadata: IMO, speed, course, draught, dimensions, destination, navigational status
-- **Live stats bar** — shows total vessel count, breakdown by top vessel types, and last update time
-- **Auto-refresh** — vessel data and stats update every 30 seconds
+- **AIS Live Stream** — Receives real-time AIS messages via WebSocket from AISStream.
+- **Dynamic Port Simulator** — Falls back to a low-overhead mock engine simulating 25 vessels across 5 shipping corridors if no API key is specified.
+- **Canvas-Optimized Map** — Uses Leaflet's canvas renderer (`preferCanvas={true}`) to plot up to 150 vessels simultaneously with near-zero DOM performance cost.
+- **Flicker-Free Live Updates** — Merges incoming position updates directly into the existing map ref (`vesselMapRef`) instead of wholesale array replacement, preventing ship markers from disappearing or flashing during updates.
+- **MMSI Flag State Decoder** — Extracts the vessel's flag state country and flag emoji dynamically using its Maritime Identification Digit (MID) prefix (e.g. `🇺🇸 United States (USA)`).
+- **3D Material Design UI** — Features elevated panels, soft depths, micro-shadows, and slide-out drawers, separating sidebar modules from the map area.
+- **Auto-Panning** — Automatically centers and zooms into a ship smoothly when selected from the sidebar.
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 19, Vite |
-| Map | Leaflet, react-leaflet, react-leaflet-cluster |
-| Backend | Node.js, Express 5 |
-| Real-time data | AISStream WebSocket API |
-| HTTP client | Axios |
+| **Frontend** | React 19, Vite, Lucide Icons |
+| **Map Rendering** | Leaflet, react-leaflet (Canvas Layer config) |
+| **Backend** | Node.js, Express 5, WS (WebSockets) |
+| **Real-time Source** | AISStream WebSocket API |
+| **HTTP client** | Fetch API |
 
 ## Project Structure
 
 ```
 ship-tracker/
 ├── public/
-│   └── logo.png            # App logo (header + browser tab)
+│   ├── favicon.svg         # Brand-matched vector compass tab icon
+│   └── logo.png            # Desktop logo asset
 ├── src/
 │   ├── components/
-│   │   ├── VesselMap.jsx   # Leaflet map with canvas ship renderer
-│   │   ├── Sidebar.jsx     # Searchable vessel list with type filter
-│   │   └── StatsBar.jsx    # Header stats (counts by vessel type)
-│   ├── App.jsx             # Root component, state management, polling
-│   ├── api.js              # REST API wrappers (fetchVessels, fetchStats)
-│   └── App.css             # Global styles
-├── server.js               # Express server + AISStream WebSocket consumer
-├── index.html
+│   │   ├── VesselMap.jsx   # Map component with Canvas markers and layer controls
+│   │   └── Sidebar.jsx     # Vessel search, sorting, and type-filter sidebar
+│   ├── utils/
+│   │   └── country.js      # MMSI-to-Flag state country translation utility
+│   ├── App.jsx             # Root component, detail drawers, and polling logic
+│   ├── api.js              # HTTP client REST wrappers
+│   └── App.css             # Elevated 3D shadow system and responsive layout styles
+├── server.js               # Node server + AIS WebSocket aggregator & mock simulator
+├── index.html              # Entry template (customized brand header)
 ├── vite.config.js
-└── .env                    # API key and port config (not committed)
+└── .env                    # Environment keys (ignored by git)
 ```
 
 ## Getting Started
@@ -49,7 +51,7 @@ ship-tracker/
 ### Prerequisites
 
 - Node.js 18+
-- An API key from [AISStream.io](https://aisstream.io)
+- An API key from [AISStream.io](https://aisstream.io) (optional; defaults to Simulator Mode if missing)
 
 ### Installation
 
@@ -80,45 +82,23 @@ npm run server
 npm run dev
 ```
 
-Then open [http://localhost:5173](http://localhost:5173) in your browser.
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ## API Endpoints
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/vessels` | All active vessels (optional `bbox` query param) |
-| GET | `/api/vessels/:mmsi` | Single vessel by MMSI |
-| GET | `/api/stats` | Vessel counts grouped by type |
+| `GET` | `/api/vessels` | All active vessels (optionally filtered by bounding box; capped at 200) |
+| `GET` | `/api/vessels/:mmsi` | Single vessel details with historical tracking |
+| `GET` | `/api/stats` | Active count statistics grouped by type |
+| `GET` | `/api/health` | Service uptime and connection telemetry |
 
 ## How It Works
 
-1. The server connects to AISStream via WebSocket and receives live AIS messages.
-2. Position updates (lat, lng, heading, speed, course) and static data (name, IMO, type, destination, dimensions) are merged into an in-memory store keyed by MMSI.
-3. Vessels not updated within 30 minutes are automatically pruned.
-4. The React frontend polls `/api/vessels` and `/api/stats` every 30 seconds and renders ships on the map as directional icons.
-5. Clicking a ship on the map or in the sidebar opens a detail panel and pans the map to that vessel.
-
-## Vessel Type Classification
-
-| Type | Color | AIS Type Codes |
-|---|---|---|
-| Cargo | Blue | 70–79 |
-| Tanker | Red | 80–89 |
-| Passenger | Purple | 60–69 |
-| Sailing | Green | 36–37 |
-| Fishing | Orange | 30 |
-| High Speed | Cyan | 40–49 |
-| Tug / Dredger | Brown | 31–35, 50–59 |
-| SAR / Military | Dark red | 55, 35 |
-| Other | Dark blue | everything else |
-
-## Build for Production
-
-```bash
-npm run build
-```
-
-The output is placed in `dist/`. Serve it with any static file host alongside the Express server.
+1. **Aggregation:** The Node server connects to `wss://stream.aisstream.io` and streams global AIS packets.
+2. **Telemetry Mapping:** Position and static metadata (IMO, dimensions, status) are parsed in-memory. If data goes missing, the server deterministically assigns realistic voyage start and endpoints based on the vessel's MMSI.
+3. **Optimized Polling:** The client fetches updates every 20 seconds. The React reconciler updates existing Canvas circles in-place, eliminating DOM thrashing.
+4. **Pruning:** To conserve memory, vessels that have not reported updates for more than 5 minutes are purged.
 
 ## License
 
